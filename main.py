@@ -173,7 +173,7 @@ def get_user_id():
     return data["id"]
 
 def get_chats(user_id):
-    data = avito_get(f"/messenger/v3/accounts/{user_id}/chats", params={"limit": 50})
+    data = avito_get(f"/messenger/v2/accounts/{user_id}/chats", params={"limit": 50})
     return data.get("chats", [])
 
 def get_messages(user_id, chat_id):
@@ -181,7 +181,7 @@ def get_messages(user_id, chat_id):
     return data.get("messages", [])
 
 def send_message(user_id, chat_id, text):
-    avito_post(f"/messenger/v3/accounts/{user_id}/chats/{chat_id}/messages", {
+    avito_post(f"/messenger/v1/accounts/{user_id}/chats/{chat_id}/messages", {
         "message": {"text": text},
         "type": "text"
     })
