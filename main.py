@@ -10,7 +10,7 @@ from datetime import datetime
 # ============================================================
 AVITO_CLIENT_ID = os.environ.get("AVITO_CLIENT_ID", "Tf2iziKvyAdQQmFaXo8U")
 AVITO_CLIENT_SECRET = os.environ.get("AVITO_CLIENT_SECRET", "Im1tYNnRJb8k0bRdAKyRhZHRAXEKFGAtoJwlwMxR")
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyD7I0h1cgrbSSiUo2APnDH9iR4CkKUWfdw")
+DEEPSEEK_API_KEY = os.environ.get("DEEPSEEK_API_KEY", "sk-33a78856c9904e8eacf392b2911bbd45")
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN", "8752214051:AAFdxc5ZmigN_GMNuRPwaG68STvhKp1dzUg")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "-5252476660")
 POLL_INTERVAL = int(os.environ.get("POLL_INTERVAL", "10"))  # секунд
@@ -211,36 +211,44 @@ def ask_gemini(chat_id, user_text, image_b64=None, image_mime=None):
     if chat_id not in conversations:
         conversations[chat_id] = []
 
-    # Формируем parts для нового сообщения
-    parts = []
+    # Формируем сообщение
+    content = []
     if image_b64:
-        parts.append({"inline_data": {"mime_type": image_mime, "data": image_b64}})
-    parts.append({"text": user_text or "."})
+        content.append({
+            "type": "image_url",
+            "image_url": {"url": f"data:{image_mime};base64,{image_b64}"}
+        })
+    content.append({"type": "text", "text": user_text or "."})
 
-    conversations[chat_id].append({"role": "user", "parts": parts})
+    conversations[chat_id].append({"role": "user", "content": content})
 
-    payload = {
-        "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
-        "contents": conversations[chat_id],
-        "generationConfig": {"temperature": 0.7, "maxOutputTokens": 1024}
-    }
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}] + conversations[chat_id]
 
     for attempt in range(5):
         resp = requests.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}",
-            json=payload
+            "https://api.deepseek.com/chat/completions",
+            headers={
+                "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "deepseek-chat",
+                "messages": messages,
+                "temperature": 0.7,
+                "max_tokens": 1024
+            }
         )
         if resp.status_code == 429:
             wait = 10 * (attempt + 1)
-            log.warning(f"Gemini 429 - жду {wait} сек...")
+            log.warning(f"DeepSeek 429 - жду {wait} сек...")
             time.sleep(wait)
             continue
         resp.raise_for_status()
         break
     data = resp.json()
 
-    reply = data["candidates"][0]["content"]["parts"][0]["text"]
-    conversations[chat_id].append({"role": "model", "parts": [{"text": reply}]})
+    reply = data["choices"][0]["message"]["content"]
+    conversations[chat_id].append({"role": "assistant", "content": reply})
 
     # Ограничиваем историю последними 20 сообщениями
     if len(conversations[chat_id]) > 20:
