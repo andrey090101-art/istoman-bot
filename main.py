@@ -225,11 +225,18 @@ def ask_gemini(chat_id, user_text, image_b64=None, image_mime=None):
         "generationConfig": {"temperature": 0.7, "maxOutputTokens": 1024}
     }
 
-    resp = requests.post(
-        f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}",
-        json=payload
-    )
-    resp.raise_for_status()
+    for attempt in range(5):
+        resp = requests.post(
+            f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}",
+            json=payload
+        )
+        if resp.status_code == 429:
+            wait = 10 * (attempt + 1)
+            log.warning(f"Gemini 429 - жду {wait} сек...")
+            time.sleep(wait)
+            continue
+        resp.raise_for_status()
+        break
     data = resp.json()
 
     reply = data["candidates"][0]["content"]["parts"][0]["text"]
